@@ -6,7 +6,7 @@ from direct.showbase.ShowBase import ShowBase
 from direct.showbase.ShowBaseGlobal import globalClock
 from panda3d.core import WindowProperties, PandaNode, NodePath
 from panda3d.core import Point3
-from panda3d.core import Vec3, LColor, Point3, VBase4
+from panda3d.core import Vec3, LColor, Point3, VBase4, Quat
 from panda3d.core import GeomVertexFormat, GeomVertexData
 from panda3d.core import Geom, GeomTriangles, GeomVertexWriter, GeomVertexRewriter
 from panda3d.core import GeomNode
@@ -71,49 +71,21 @@ class ColoringBoard(ShowBase):
         # **********************************************************    
         self.show_polh()
 
-        self.click = False
-        self.release = False
         self.dragging = 0
         self.clicked_pos = None
 
-        self.accept('mouse1', self.mouse_click)
-        self.accept('mouse1-up', self.mouse_release)
+        self.accept('mouse1', self.click)
+        self.accept('mouse1-up', self.release)
         self.taskMgr.add(self.update, 'update')
 
-    
-    
-    def mouse_click(self):
-        self.click = True
+    def click(self):
         self.clicked_pos = self.mouseWatcherNode.getMouse()
-        self.dragging = globalClock.getFrameCount() + 5
-        # self.mouse_pos = self.mouseWatcherNode.getMouse()
-        # pass
+        self.dragging = globalClock.getFrameCount() + 7
 
-    def mouse_release(self):
-        self.release = True
-
-
-    # def click(self):
-    #     mouse_pos = self.mouseWatcherNode.getMouse()
-    #     print('mouse_pos', mouse_pos)
-    #     near_pos = Point3()
-    #     far_pos = Point3()
-    #     self.camLens.extrude(mouse_pos, near_pos, far_pos)
-    #     from_pos = self.render.getRelativePoint(self.cam, near_pos)
-    #     to_pos = self.render.getRelativePoint(self.cam, far_pos)
-    #     result = self.world.rayTestClosest(from_pos, to_pos)
-    #     if result.hasHit():
-    #         node = result.getNode()
-    #         name = node.getName()
-    #         idx = int(name.split('_')[1])
-    #         face = self.faces[idx]
-    #         self.change_color(face)
-
-    # def change_color(self, face):
-    #     if hexa_color := self.app.selected_color():
-    #         rgb = [int(n, 16) / 255 for n in wrap(hexa_color[1:], 2)]
-    #         color = LColor(*rgb, 1)
-    #         face.setColor(color)
+    def release(self):
+        if globalClock.getFrameCount() <= self.dragging:
+            self.change_color()
+        self.dragging = 0
 
     def change_color(self):
         near_pos = Point3()
@@ -127,12 +99,11 @@ class ColoringBoard(ShowBase):
             name = node.getName()
             idx = int(name.split('_')[1])
             face = self.faces[idx]
-        
+
             if hexa_color := self.app.selected_color():
                 rgb = [int(n, 16) / 255 for n in wrap(hexa_color[1:], 2)]
                 color = LColor(*rgb, 1)
                 face.setColor(color)
-
 
     def show_polh(self):
         self.faces = [face for face in self.make_polh()]
@@ -160,17 +131,39 @@ class ColoringBoard(ShowBase):
 
         # shape_root.hprInterval(8, (360, 720, 360)).loop()
 
+    
+    def rotate(self, dt):
+        angle = 45 * dt
+        axis = Vec3.up()
+        # # axis = Vec3.right()
+        # # axis = Vec3.forward()
+        # axis = Vec3.back()
+
+        q = Quat()
+        q.setFromAxisAngle(angle, axis.normalized())
+        r = q.xform(self.camera.getPos() - Point3(0, 0, 0))
+        rotated_pos = Point3(0, 0, 0) + r
+        self.camera.setPos(rotated_pos)
+
+        self.camera.setH(self.camera.getH() + angle)
+
+
+
+        # self.camera.setP(self.camera.getP() + angle)
+
+        
+        # self.camera.lookAt(Point3(0, 0, 0))
+        # self.camera.lookAt(Point3(0, 0, 0))
+        # self.camera.lookAt(Point3(0, 0, 0))
+        # print(self.camera.getHpr())
+        
+        # self.camera.setHpr(self.camera.getHpr() + axis * 3)
+    
     def update(self, task):
         dt = globalClock.getDt()
 
-        if self.click:
-            if self.release:
-                if globalClock.getFrameCount() <= self.dragging:
-                    self.change_color()
-                    self.click = False
-                    self.release = False
-            else:
-                print('rotate')
+        if 0 < self.dragging < globalClock.getFrameCount():
+            self.rotate(dt)
 
         self.world.doPhysics(dt)
         return task.cont
