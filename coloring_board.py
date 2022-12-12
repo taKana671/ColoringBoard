@@ -1,3 +1,4 @@
+import math
 import random
 from enum import Enum
 from textwrap import wrap
@@ -6,7 +7,7 @@ from direct.showbase.ShowBase import ShowBase
 from direct.showbase.ShowBaseGlobal import globalClock
 from panda3d.core import WindowProperties, PandaNode, NodePath
 from panda3d.core import Point3
-from panda3d.core import Vec3, LColor, Point3, VBase4, Quat
+from panda3d.core import Vec3, LColor, Point3, Quat, Vec2
 from panda3d.core import GeomVertexFormat, GeomVertexData
 from panda3d.core import Geom, GeomTriangles, GeomVertexWriter, GeomVertexRewriter
 from panda3d.core import GeomNode
@@ -59,7 +60,14 @@ class ColoringBoard(ShowBase):
         self.openMainWindow(type='onscreen', props=props, size=(800, 600))
 
         self.disableMouse()
-        self.camera.setPos(10, 10, 10)
+
+
+        self.camera_np = NodePath(PandaNode('cameraNode'))
+        self.camera_np.reparentTo(self.render)
+        self.camera.reparentTo(self.camera_np)
+
+        self.camera.setPos(15, 0, 0)
+        # self.camera.setPos(10, 10, 10)
         self.camera.lookAt(0, 0, 0)
 
         self.world = BulletWorld()
@@ -73,24 +81,28 @@ class ColoringBoard(ShowBase):
 
         self.dragging = 0
         self.clicked_pos = None
+        self.clicked = False
+        self.no_dragging = False
 
         self.accept('mouse1', self.click)
         self.accept('mouse1-up', self.release)
         self.taskMgr.add(self.update, 'update')
 
     def click(self):
-        self.clicked_pos = self.mouseWatcherNode.getMouse()
+        print('clicked!')
+        self.clicked = True
         self.dragging = globalClock.getFrameCount() + 7
 
     def release(self):
         if globalClock.getFrameCount() <= self.dragging:
-            self.change_color()
+            self.no_dragging = True
+            # self.change_color()
         self.dragging = 0
 
-    def change_color(self):
+    def change_color(self, m_pos):
         near_pos = Point3()
         far_pos = Point3()
-        self.camLens.extrude(self.clicked_pos, near_pos, far_pos)
+        self.camLens.extrude(m_pos, near_pos, far_pos)
         from_pos = self.render.getRelativePoint(self.cam, near_pos)
         to_pos = self.render.getRelativePoint(self.cam, far_pos)
         result = self.world.rayTestClosest(from_pos, to_pos)
@@ -132,26 +144,64 @@ class ColoringBoard(ShowBase):
         # shape_root.hprInterval(8, (360, 720, 360)).loop()
 
     
-    def rotate(self, dt):
-        angle = 45 * dt
-        axis = Vec3.up()
-        # # axis = Vec3.right()
-        # # axis = Vec3.forward()
-        # axis = Vec3.back()
+    def rotate(self, dt, m_pos):
+        vec = Vec3()
 
-        q = Quat()
-        q.setFromAxisAngle(angle, axis.normalized())
-        r = q.xform(self.camera.getPos() - Point3(0, 0, 0))
-        rotated_pos = Point3(0, 0, 0) + r
-        self.camera.setPos(rotated_pos)
+        # print(clicked_now.x, self.clicked_pos.x)
+        if m_pos.x - self.clicked_pos.x < 0:
+            vec.x += 90
+        elif m_pos.x - self.clicked_pos.x > 0:
+            vec.x -= 90
 
-        self.camera.setH(self.camera.getH() + angle)
+        if m_pos.y - self.clicked_pos.y < 0:
+            vec.z += 90
+        elif m_pos.y - self.clicked_pos.y > 0:
+            vec.z -= 90
+
+        print('diff', (m_pos.y - self.clicked_pos.y) * 1000)
+        
+        h = (m_pos.y - self.clicked_pos.y) * 1000
+        if m_pos.x - self.clicked_pos.x < 0:
+            vec.y += h
+        elif m_pos.x - self.clicked_pos.x > 0:
+            vec.y -= h
+
+        # self.camera_np.setH(self.camera_np.getH() + h)
+        self.camera_np.setHpr(self.camera_np.getHpr() + vec * dt)
+
+        self.clicked_pos.x = m_pos.x
+        self.clicked_pos.y = m_pos.y
 
 
+        # r = 0
+        # if clicked_now.y < self.clicked_pos.y:
+        #     r -= dt * 30
+        # elif clicked_now.y > self.clicked_pos.y:
+        #     r += dt * 30
+    
+        
+        # self.camera_np.setHpr(self.camera_np.getHpr() + Vec3(h, 0, r))
+        # self.clicked_pos = clicked_now
+
+        # angle = 45 * dt
+        # self.camera_np.setH(self.camera_np.getH() + angle)
+        # self.camera_np.setP(self.camera_np.getP() + angle)
+
+        # self.camera_np.setR(self.camera_np.getR() + angle)
+        
+        # axis = Vec3.up()
+        # # # axis = Vec3.right()
+        # # # axis = Vec3.forward()
+        # # axis = Vec3.back()
+        # q = Quat()
+        # q.setFromAxisAngle(angle, axis.normalized())
+        # r = q.xform(self.camera.getPos() - Point3(0, 0, 0))
+        # rotated_pos = Point3(0, 0, 0) + r
+        # self.camera.setPos(rotated_pos)
+
+        # self.camera.setH(self.camera.getH() + angle)
 
         # self.camera.setP(self.camera.getP() + angle)
-
-        
         # self.camera.lookAt(Point3(0, 0, 0))
         # self.camera.lookAt(Point3(0, 0, 0))
         # self.camera.lookAt(Point3(0, 0, 0))
@@ -162,8 +212,18 @@ class ColoringBoard(ShowBase):
     def update(self, task):
         dt = globalClock.getDt()
 
-        if 0 < self.dragging < globalClock.getFrameCount():
-            self.rotate(dt)
+        if self.mouseWatcherNode.hasMouse():
+            m_pos = self.mouseWatcherNode.getMouse()
+
+            if self.clicked:
+                self.clicked_pos = Vec2(m_pos.x, m_pos.y)
+                self.clicked = False
+            if self.no_dragging:
+                self.change_color(m_pos)
+                self.no_dragging = False
+
+            if 0 < self.dragging < globalClock.getFrameCount():
+                self.rotate(dt, m_pos)
 
         self.world.doPhysics(dt)
         return task.cont
