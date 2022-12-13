@@ -1,22 +1,19 @@
-import math
 import random
-from enum import Enum
+from enum import Enum, auto
 from textwrap import wrap
 
 from direct.showbase.ShowBase import ShowBase
 from direct.showbase.ShowBaseGlobal import globalClock
 from panda3d.core import WindowProperties, PandaNode, NodePath
-from panda3d.core import Point3
-from panda3d.core import Vec3, LColor, Point3, Quat, Vec2
+from panda3d.core import Vec3, LColor, Point3, Vec2
 from panda3d.core import GeomVertexFormat, GeomVertexData
 from panda3d.core import Geom, GeomTriangles, GeomVertexWriter, GeomVertexRewriter
 from panda3d.core import GeomNode
+from panda3d.core import BitMask32
 from panda3d.bullet import BulletWorld, BulletDebugNode
 from panda3d.bullet import BulletRigidBodyNode
 from panda3d.bullet import BulletConvexHullShape
 
-
-from panda3d.core import BitMask32
 
 from tkwindow import WindowTk
 from polyhedrons_data import POLYHEDRONS
@@ -40,6 +37,13 @@ class Colors(Enum):
         return random.sample([m.value for m in cls], n)
 
 
+class Mouse(Enum):
+
+    CLICK = auto()
+    RELEASE = auto()
+    DRAG = auto()
+
+
 class ColoringBoard(ShowBase):
 
     def __init__(self):
@@ -61,7 +65,6 @@ class ColoringBoard(ShowBase):
 
         self.disableMouse()
 
-
         self.camera_np = NodePath(PandaNode('cameraNode'))
         self.camera_np.reparentTo(self.render)
         self.camera.reparentTo(self.camera_np)
@@ -76,28 +79,22 @@ class ColoringBoard(ShowBase):
         debug = self.render.attachNewNode(BulletDebugNode('debug'))
         self.world.setDebugNode(debug.node())
         debug.show()
-        # **********************************************************    
+        # **********************************************************
         self.show_polh()
 
         self.dragging = 0
         self.clicked_pos = None
-        self.clicked = False
-        self.no_dragging = False
+        self.state = None
 
         self.accept('mouse1', self.click)
         self.accept('mouse1-up', self.release)
         self.taskMgr.add(self.update, 'update')
 
     def click(self):
-        print('clicked!')
-        self.clicked = True
-        self.dragging = globalClock.getFrameCount() + 7
+        self.state = Mouse.CLICK
 
     def release(self):
-        if globalClock.getFrameCount() <= self.dragging:
-            self.no_dragging = True
-            # self.change_color()
-        self.dragging = 0
+        self.state = Mouse.RELEASE
 
     def change_color(self, m_pos):
         near_pos = Point3()
@@ -141,89 +138,44 @@ class ColoringBoard(ShowBase):
             self.world.attachRigidBody(face.node())
             yield face
 
-        # shape_root.hprInterval(8, (360, 720, 360)).loop()
-
-    
     def rotate(self, dt, m_pos):
         vec = Vec3()
+        delta_x = m_pos.x - self.clicked_pos.x
+        delta_y = m_pos.y - self.clicked_pos.y
 
-        # print(clicked_now.x, self.clicked_pos.x)
-        if m_pos.x - self.clicked_pos.x < 0:
-            vec.x += 90
-        elif m_pos.x - self.clicked_pos.x > 0:
+        if delta_x < 0:
             vec.x -= 90
+        elif delta_x > 0:
+            vec.x += 90
 
-        if m_pos.y - self.clicked_pos.y < 0:
-            vec.z += 90
-        elif m_pos.y - self.clicked_pos.y > 0:
+        if delta_y < 0:
             vec.z -= 90
+        elif delta_y > 0:
+            vec.z += 90
 
-        print('diff', (m_pos.y - self.clicked_pos.y) * 1000)
-        
-        h = (m_pos.y - self.clicked_pos.y) * 1000
-        if m_pos.x - self.clicked_pos.x < 0:
-            vec.y += h
-        elif m_pos.x - self.clicked_pos.x > 0:
-            vec.y -= h
-
-        # self.camera_np.setH(self.camera_np.getH() + h)
         self.camera_np.setHpr(self.camera_np.getHpr() + vec * dt)
-
         self.clicked_pos.x = m_pos.x
         self.clicked_pos.y = m_pos.y
 
-
-        # r = 0
-        # if clicked_now.y < self.clicked_pos.y:
-        #     r -= dt * 30
-        # elif clicked_now.y > self.clicked_pos.y:
-        #     r += dt * 30
-    
-        
-        # self.camera_np.setHpr(self.camera_np.getHpr() + Vec3(h, 0, r))
-        # self.clicked_pos = clicked_now
-
-        # angle = 45 * dt
-        # self.camera_np.setH(self.camera_np.getH() + angle)
-        # self.camera_np.setP(self.camera_np.getP() + angle)
-
-        # self.camera_np.setR(self.camera_np.getR() + angle)
-        
-        # axis = Vec3.up()
-        # # # axis = Vec3.right()
-        # # # axis = Vec3.forward()
-        # # axis = Vec3.back()
-        # q = Quat()
-        # q.setFromAxisAngle(angle, axis.normalized())
-        # r = q.xform(self.camera.getPos() - Point3(0, 0, 0))
-        # rotated_pos = Point3(0, 0, 0) + r
-        # self.camera.setPos(rotated_pos)
-
-        # self.camera.setH(self.camera.getH() + angle)
-
-        # self.camera.setP(self.camera.getP() + angle)
-        # self.camera.lookAt(Point3(0, 0, 0))
-        # self.camera.lookAt(Point3(0, 0, 0))
-        # self.camera.lookAt(Point3(0, 0, 0))
-        # print(self.camera.getHpr())
-        
-        # self.camera.setHpr(self.camera.getHpr() + axis * 3)
-    
     def update(self, task):
         dt = globalClock.getDt()
 
         if self.mouseWatcherNode.hasMouse():
             m_pos = self.mouseWatcherNode.getMouse()
 
-            if self.clicked:
-                self.clicked_pos = Vec2(m_pos.x, m_pos.y)
-                self.clicked = False
-            if self.no_dragging:
-                self.change_color(m_pos)
-                self.no_dragging = False
-
-            if 0 < self.dragging < globalClock.getFrameCount():
-                self.rotate(dt, m_pos)
+            match self.state:
+                case Mouse.CLICK:
+                    self.dragging = globalClock.getFrameCount() + 7
+                    self.clicked_pos = Vec2(m_pos.x, m_pos.y)
+                    self.state = Mouse.DRAG
+                case Mouse.RELEASE:
+                    if globalClock.getFrameCount() <= self.dragging:
+                        self.change_color(m_pos)
+                    self.dragging = 0
+                    self.state = None
+                case Mouse.DRAG:
+                    if 0 < self.dragging < globalClock.getFrameCount():
+                        self.rotate(dt, m_pos)
 
         self.world.doPhysics(dt)
         return task.cont
@@ -242,6 +194,7 @@ class Face(NodePath):
         self.node().addShape(shape)
         self.setCollideMask(BitMask32(1))
         self.setScale(1.5)
+        self.setR(-30)
 
 
 class GeomMaker:
@@ -299,13 +252,6 @@ class GeomMaker:
         return node
 
 
-
 if __name__ == '__main__':
-    # app = tk.Tk()
-    # window = WindowTk(app)
-    # window.mainloop()
-    # root = tk.Tk()
-    # Pmw.initialise(root)
-    
     app = ColoringBoard()
     app.run()
