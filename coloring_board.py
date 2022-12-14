@@ -7,7 +7,7 @@ from direct.showbase.ShowBaseGlobal import globalClock
 from panda3d.core import WindowProperties, PandaNode, NodePath
 from panda3d.core import Vec3, LColor, Point3, Vec2
 from panda3d.core import GeomVertexFormat, GeomVertexData
-from panda3d.core import Geom, GeomTriangles, GeomVertexWriter, GeomVertexRewriter
+from panda3d.core import Geom, GeomTriangles, GeomVertexReader, GeomVertexWriter, GeomVertexRewriter
 from panda3d.core import GeomNode
 from panda3d.core import BitMask32
 from panda3d.bullet import BulletWorld, BulletDebugNode
@@ -80,6 +80,7 @@ class ColoringBoard(ShowBase):
         self.world.setDebugNode(debug.node())
         debug.show()
         # **********************************************************
+        self.polh = Polyhedron(self.world)
         self.show_polh()
 
         self.dragging = 0
@@ -103,40 +104,42 @@ class ColoringBoard(ShowBase):
         from_pos = self.render.getRelativePoint(self.cam, near_pos)
         to_pos = self.render.getRelativePoint(self.cam, far_pos)
         result = self.world.rayTestClosest(from_pos, to_pos)
+
         if result.hasHit():
             node = result.getNode()
-            name = node.getName()
-            idx = int(name.split('_')[1])
-            face = self.faces[idx]
-
             if hexa_color := self.app.selected_color():
                 rgb = [int(n, 16) / 255 for n in wrap(hexa_color[1:], 2)]
                 color = LColor(*rgb, 1)
-                face.setColor(color)
+                self.polh.change_face_color(node.getName(), color)
 
     def show_polh(self):
-        self.faces = [face for face in self.make_polh()]
-
-    def make_polh(self):
-        shape_root = NodePath(PandaNode('shape'))
-        shape_root.reparentTo(self.render)
-
         self.data = POLYHEDRONS['elongated_pentagonal_rotunda']
         vertices = self.data['vertices']
         faces = self.data['faces']
         color_pattern = self.data['color_pattern']
+        self.polh.make_faces(vertices, faces, color_pattern)
 
-        n = max(self.data['color_pattern'])
-        colors = Colors.select(n + 1)
-        maker = GeomMaker()
+    def output_file(self):
+        for face in self.polh_root.getChildren():
+            np = face.findAllMatches('**/+GeomNode').getPath(0)
+            geom_node = np.node()
+            geom = geom_node.getGeom(0)
+            vdata = geom.getVertexData()
+            vertex = GeomVertexReader(vdata, 'vertex')
+            while not vertex.isAtEnd():
+                v = vertex.getData3()
+                # print(v)
 
-        for idx, (f, p) in enumerate(zip(faces, color_pattern)):
-            face = [Vec3(vertices[i]) for i in f]
-            geom_node = maker.make_geomnode(face, colors[p])
-            face = Face(f'face_{idx}', geom_node)
-            face.reparentTo(shape_root)
-            self.world.attachRigidBody(face.node())
-            yield face
+            for i in range(geom.getNumPrimitives()):
+                prim = geom.getPrimitive(i)
+
+                for p in range(prim.getNumPrimitives()):
+                    start = prim.getPrimitiveStart(p)
+                    end = prim.getPrimitiveEnd(p)
+
+                    for i in range(start, end):
+                        vi = prim.getVertex(i)
+                        # print(vi)
 
     def rotate(self, dt, m_pos):
         vec = Vec3()
@@ -197,31 +200,36 @@ class Face(NodePath):
         self.setR(-30)
 
 
-class GeomMaker:
+class Polyhedron(NodePath):
 
-    def triangle(self, start):
-        return (start, start + 1, start + 2)
+    def __init__(self, world):
+        super().__init__(PandaNode('polyhedronRoot'))
+        self.reparentTo(base.render)
+        self.world = world
 
-    def square(self, start):
-        for x, y, z in [(0, 1, 3), (1, 2, 3)]:
-            yield (start + x, start + y, start + z)
+    def make_faces(self, vertices, faces, color_pattern):
+        n = max(color_pattern)
+        colors = Colors.select(n + 1)
 
-    def polygon(self, start, vertices_num):
-        for i in range(2, vertices_num):
-            if i == 2:
-                yield (start, start + i - 1, start + i)
-            else:
-                yield (start + i - 1, start, start + i)
+        for idx, (f, p) in enumerate(zip(faces, color_pattern)):
+            face = [Vec3(vertices[i]) for i in f]
+            geom_node = self.make_geomnode(face, colors[p])
+            face = Face(f'face_{idx}', geom_node)
+            face.reparentTo(self)
+            self.world.attachRigidBody(face.node())
 
-    def prim_vertices(self, face):
-        start = 0
-        if (vertices_num := len(face)) == 3:
-            yield self.triangle(start)
-        elif vertices_num == 4:
-            yield from self.square(start)
-        elif vertices_num >= 5:
-            yield from self.polygon(start, vertices_num)
-        start += vertices_num
+    def prim_vertices(self, n):
+        if n == 3:
+            yield (0, 1, 2)
+        elif n == 4:
+            for vertices in [(0, 1, 3), (1, 2, 3)]:
+                yield vertices
+        else:
+            for i in range(2, n):
+                if i == 2:
+                    yield (0, i - 1, i)
+                else:
+                    yield (i - 1, 0, 0 + i)
 
     def make_geomnode(self, face, rgba):
         format_ = GeomVertexFormat.getV3n3cpt2()  # getV3n3c4
@@ -242,7 +250,7 @@ class GeomMaker:
         node = GeomNode('geomnode')
         prim = GeomTriangles(Geom.UHStatic)
 
-        for vertices in self.prim_vertices(face):
+        for vertices in self.prim_vertices(len(face)):
             prim.addVertices(*vertices)
 
         geom = Geom(vdata)
@@ -250,6 +258,11 @@ class GeomMaker:
         node.addGeom(geom)
 
         return node
+
+    def change_face_color(self, node_name, color):
+        i = int(node_name.split('_')[1])
+        face = self.getChild(i)
+        face.setColor(color)
 
 
 if __name__ == '__main__':
