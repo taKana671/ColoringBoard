@@ -22,23 +22,23 @@ COLORS = [
 
 class WindowTk(ttk.Frame):
 
-    def __init__(self, master):
+    def __init__(self, master, func_save_file):
         super().__init__(master)
         self.pack(fill=tk.Y, side=tk.LEFT, pady=10)
         self.make_gui()
-        self.make_menubar()
+        self.make_menubar(func_save_file)
 
     def selected_color(self):
         color = self.selected_color_label.cget('background')
         return str(color)
 
-    def make_menubar(self):
+    def make_menubar(self, func_save_file):
         menubar = tk.Menu(self)
         menu_file = tk.Menu(menubar, tearoff=False)
-        menu_file.add_command(label='Save As', command=self.save_file, accelerator='Ctrl+S')
+        menu_file.add_command(label='Save As', command=func_save_file, accelerator='Ctrl+S')
         menu_file.add_separator()
         menu_file.add_command(label='close', command=self.close)
-        menu_file.bind_all('<Control-s>', self.save_file)
+        menu_file.bind_all('<Control-s>', func_save_file)
 
         menubar.add_cascade(label="File", menu=menu_file)
         self.master.config(menu=menubar)
@@ -123,9 +123,6 @@ class WindowTk(ttk.Frame):
             new_color = f'{color[:5]}{value}'
 
         self.created_color_label.configure(background=new_color)
-
-    def save_file(self, event=None):
-        print('save')
 
     def close(self, event=None):
         self.quit()

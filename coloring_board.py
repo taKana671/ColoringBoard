@@ -52,7 +52,7 @@ class ColoringBoard(ShowBase):
         root = self.tkRoot
         root.geometry('1080x640')
         root.resizable(False, False)
-        self.app = WindowTk(root)
+        self.app = WindowTk(root, self.save_file)
         root.bind('<Escape>', self.app.close)
 
         props = WindowProperties()
@@ -97,6 +97,13 @@ class ColoringBoard(ShowBase):
     def release(self):
         self.state = Mouse.RELEASE
 
+    def save_file(self, event=None):
+        geom_node = self.polh.connect_geoms()
+        np = NodePath(PandaNode('elongatedPentagonalRotunda'))
+        obj = np.attachNewNode(geom_node)
+        obj.setTwoSided(True)
+        np.writeBamFile('elongatedPentagonalRotunda.bam')
+
     def change_color(self, m_pos):
         near_pos = Point3()
         far_pos = Point3()
@@ -118,28 +125,6 @@ class ColoringBoard(ShowBase):
         faces = self.data['faces']
         color_pattern = self.data['color_pattern']
         self.polh.make_faces(vertices, faces, color_pattern)
-
-    def output_file(self):
-        for face in self.polh_root.getChildren():
-            np = face.findAllMatches('**/+GeomNode').getPath(0)
-            geom_node = np.node()
-            geom = geom_node.getGeom(0)
-            vdata = geom.getVertexData()
-            vertex = GeomVertexReader(vdata, 'vertex')
-            while not vertex.isAtEnd():
-                v = vertex.getData3()
-                # print(v)
-
-            for i in range(geom.getNumPrimitives()):
-                prim = geom.getPrimitive(i)
-
-                for p in range(prim.getNumPrimitives()):
-                    start = prim.getPrimitiveStart(p)
-                    end = prim.getPrimitiveEnd(p)
-
-                    for i in range(start, end):
-                        vi = prim.getVertex(i)
-                        # print(vi)
 
     def rotate(self, dt, m_pos):
         vec = Vec3()
@@ -189,9 +174,8 @@ class Face(NodePath):
     def __init__(self, name, geom_node):
         super().__init__(BulletRigidBodyNode(name))
         # self.reparentTo(base.render)
-        obj = self.attachNewNode(geom_node)
+        obj = self.attachNewNode(geom_node)  # obj.reparentTo(self)はいらない
         obj.setTwoSided(True)
-        obj.reparentTo(self)
         shape = BulletConvexHullShape()
         shape.addGeom(geom_node.getGeom(0))
         self.node().addShape(shape)
@@ -212,34 +196,43 @@ class Polyhedron(NodePath):
         colors = Colors.select(n + 1)
 
         for idx, (f, p) in enumerate(zip(faces, color_pattern)):
-            face = [Vec3(vertices[i]) for i in f]
-            geom_node = self.make_geomnode(face, colors[p])
+            face = (Vec3(vertices[i]) for i in f)
+            geom_node = self.make_face_geomnode(face, len(f), colors[p])
             face = Face(f'face_{idx}', geom_node)
             face.reparentTo(self)
             self.world.attachRigidBody(face.node())
 
-    def prim_vertices(self, n):
-        if n == 3:
-            yield (0, 1, 2)
-        elif n == 4:
-            for vertices in [(0, 1, 3), (1, 2, 3)]:
-                yield vertices
-        else:
-            for i in range(2, n):
-                if i == 2:
-                    yield (0, i - 1, i)
-                else:
-                    yield (i - 1, 0, 0 + i)
+    def triangle(self, start):
+        return (start, start + 1, start + 2)
 
-    def make_geomnode(self, face, rgba):
+    def square(self, start):
+        for x, y, z in [(0, 1, 3), (1, 2, 3)]:
+            yield (start + x, start + y, start + z)
+
+    def polygon(self, start, vertices_num):
+        for i in range(2, vertices_num):
+            if i == 2:
+                yield (start, start + i - 1, start + i)
+            else:
+                yield (start + i - 1, start, start + i)
+
+    def prim_vertices(self, n, start):
+        match n:
+            case 3:
+                yield self.triangle(start)
+            case 4:
+                yield from self.square(start)
+            case _:
+                yield from self.polygon(start, n)
+
+    def make_face_geomnode(self, face, num_vertices, rgba):
         format_ = GeomVertexFormat.getV3n3cpt2()  # getV3n3c4
         vdata = GeomVertexData('triangle', format_, Geom.UHStatic)
-        vdata.setNumRows(len(face))
+        vdata.setNumRows(num_vertices)
 
         vertex = GeomVertexWriter(vdata, 'vertex')
         normal = GeomVertexWriter(vdata, 'normal')
         color = GeomVertexWriter(vdata, 'color')
-        # texcoord = GeomVertexWriter(vdata, 'texcoord')
 
         for pt in face:
             vertex.addData3(pt)
@@ -250,7 +243,7 @@ class Polyhedron(NodePath):
         node = GeomNode('geomnode')
         prim = GeomTriangles(Geom.UHStatic)
 
-        for vertices in self.prim_vertices(len(face)):
+        for vertices in self.prim_vertices(num_vertices, 0):
             prim.addVertices(*vertices)
 
         geom = Geom(vdata)
@@ -263,6 +256,46 @@ class Polyhedron(NodePath):
         i = int(node_name.split('_')[1])
         face = self.getChild(i)
         face.setColor(color)
+
+    def connect_geoms(self):
+        format_ = GeomVertexFormat.getV3n3cpt2()  # getV3n3c4
+        vdata = GeomVertexData('triangle', format_, Geom.UHStatic)
+        vertex_writer = GeomVertexWriter(vdata, 'vertex')
+        normal_writer = GeomVertexWriter(vdata, 'normal')
+        color_writer = GeomVertexWriter(vdata, 'color')
+
+        prim = GeomTriangles(Geom.UHStatic)
+        start = 0
+
+        for face in self.getChildren():
+            rgba = face.getColor() if face.hasColor() else None
+            np = face.findAllMatches('**/+GeomNode').getPath(0)
+            geom_node = np.node()
+            geom = geom_node.getGeom(0)
+            face_vdata = geom.getVertexData()
+            vertex_reader = GeomVertexReader(face_vdata, 'vertex')
+            normal_reader = GeomVertexReader(face_vdata, 'normal')
+            color_reader = GeomVertexReader(face_vdata, 'color')
+
+            while not vertex_reader.isAtEnd():
+                vertex_writer.addData3(vertex_reader.getData3())
+                normal_writer.addData3(normal_reader.getData3())
+                if rgba:
+                    color_writer.addData4f(rgba)
+                else:
+                    color_writer.addData4f(color_reader.getData4f())
+
+            n = face_vdata.getNumRows()
+            for vertices in self.prim_vertices(n, start):
+                prim.addVertices(*vertices)
+            start += n
+
+        node = GeomNode('geomnode')
+        geom = Geom(vdata)
+        geom.addPrimitive(prim)
+        node.addGeom(geom)
+
+        return node
 
 
 if __name__ == '__main__':
