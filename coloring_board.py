@@ -97,12 +97,12 @@ class ColoringBoard(ShowBase):
     def release(self):
         self.state = Mouse.RELEASE
 
-    def save_file(self, event=None):
+    def save_file(self, filename):
         geom_node = self.polh.connect_geoms()
         np = NodePath(PandaNode('elongatedPentagonalRotunda'))
         obj = np.attachNewNode(geom_node)
         obj.setTwoSided(True)
-        np.writeBamFile('elongatedPentagonalRotunda.bam')
+        np.writeBamFile(filename)
 
     def change_color(self, m_pos):
         near_pos = Point3()

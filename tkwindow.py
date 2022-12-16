@@ -1,5 +1,9 @@
+import os
+import contextlib
 import tkinter as tk
 import tkinter.ttk as ttk
+from pathlib import Path
+from tkinter import filedialog
 
 
 COLORS = [
@@ -20,25 +24,36 @@ COLORS = [
 ]
 
 
+@contextlib.contextmanager
+def change_dir(path):
+    prev_dir = Path.cwd()
+    os.chdir(path)
+    try:
+        yield
+    finally:
+        os.chdir(prev_dir)
+
+
 class WindowTk(ttk.Frame):
 
     def __init__(self, master, func_save_file):
         super().__init__(master)
         self.pack(fill=tk.Y, side=tk.LEFT, pady=10)
+        self.make_file = func_save_file
         self.make_gui()
-        self.make_menubar(func_save_file)
+        self.make_menubar()
 
     def selected_color(self):
         color = self.selected_color_label.cget('background')
         return str(color)
 
-    def make_menubar(self, func_save_file):
+    def make_menubar(self):
         menubar = tk.Menu(self)
         menu_file = tk.Menu(menubar, tearoff=False)
-        menu_file.add_command(label='Save As', command=func_save_file, accelerator='Ctrl+S')
+        menu_file.add_command(label='Save As', command=self.save_file, accelerator='Ctrl+S')
         menu_file.add_separator()
         menu_file.add_command(label='close', command=self.close)
-        menu_file.bind_all('<Control-s>', func_save_file)
+        menu_file.bind_all('<Control-s>', self.save_file)
 
         menubar.add_cascade(label="File", menu=menu_file)
         self.master.config(menu=menubar)
@@ -50,13 +65,14 @@ class WindowTk(ttk.Frame):
         self.custom_idx = 0
         self.make_gradation_picker()
         self.make_button()
+        self.make_combo_area()
 
     def make_selected_color_display(self):
         frame = ttk.Frame(self)
         frame.pack(side=tk.TOP, padx=10, pady=10)
         label = ttk.Label(frame, text='Selected Color : ')
         label.pack(side=tk.LEFT)
-        self.selected_color_label = ttk.Label(frame, width=20, relief=tk.SUNKEN)
+        self.selected_color_label = ttk.Label(frame, width=22, relief=tk.SUNKEN)
         self.selected_color_label.pack(side=tk.LEFT)
 
     def make_basic_color_panel(self):
@@ -99,6 +115,38 @@ class WindowTk(ttk.Frame):
             frame, text='Add Custom Colors', width=20, command=self.add_custom_color)
         btn.pack(side=tk.LEFT, padx=(10, 1))
 
+    def make_combo_area(self):
+        frame = ttk.Frame(self)
+        frame.pack(side=tk.TOP, padx=10, pady=15)
+
+        label = ttk.Label(frame, text='Coloring Picture')
+        label.pack(side=tk.TOP, pady=5)
+
+        item_list = [
+            'ElongatedPentagonalRotunda',
+            'PentagonalGyrocupolarotunda',
+            'PentagonalGyrobicupola',
+            'Triangle',
+            'Square'
+        ]
+        self.combobox = ttk.Combobox(
+            master=frame,
+            values=item_list,
+            justify='left',
+            state='readonly',
+            height=10,
+            width=35
+        )
+        self.combobox.pack(side=tk.TOP)
+        self.combobox.set(item_list[0])
+        self.combobox.bind(
+            '<<ComboboxSelected>>',
+            self.show_coloring_picture
+        )
+        btn = tk.Button(
+            frame, text='Save', width=32, command=self.save_file)
+        btn.pack(side=tk.TOP, pady=10)
+
     def show_selected_color(self, event):
         if color := event.widget.cget('background'):
             self.selected_color_label.configure(background=color)
@@ -123,6 +171,22 @@ class WindowTk(ttk.Frame):
             new_color = f'{color[:5]}{value}'
 
         self.created_color_label.configure(background=new_color)
+
+    def save_file(self):
+        if filepath := filedialog.asksaveasfilename(
+                title='Save as',
+                filetypes=[('bam', '.bam')],
+                initialdir='./',
+                defaultextension='bam',
+                initialfile='elongatedPentagonalRotunda'):
+            filepath = Path(filepath)
+
+            # Using WindowsPath causes an error.
+            with change_dir(filepath.parent):
+                self.make_file(filepath.name)
+
+    def show_coloring_picture(self, event=None):
+        print(self.combobox.get())
 
     def close(self, event=None):
         self.quit()
