@@ -192,6 +192,20 @@ class Polyhedron(NodePath):
         self.world = world
 
     def make_faces(self, vertices, faces, color_pattern):
+        # >>> li = [len(item) for item in faces]
+        # >>> li
+        # [5, 3, 4, 4, 3, 4, 5, 4]
+        # >>> set(li)
+        # {3, 4, 5}
+        # >>> d = {item: i for item, i in enumerate(set(li))}
+        # >>> d
+        # {0: 3, 1: 4, 2: 5}
+        # >>> d = {item: i for i, item in enumerate(set(li))}
+        # >>> d
+        # {3: 0, 4: 1, 5: 2}
+        # >>> [d[item] for item in li]
+        # [2, 0, 1, 1, 0, 1, 2, 1]
+        
         n = max(color_pattern)
         colors = Colors.select(n + 1)
 

@@ -5,6 +5,8 @@ import tkinter.ttk as ttk
 from pathlib import Path
 from tkinter import filedialog
 
+from db_manage import create_df
+
 
 COLORS = [
     '#000000', '#696969', '#808080', '#a9a9a9', '#c0c0c0', '#d3d3d3', '#dcdcdc', '#f5f5f5', '#ffffff', '#fffafa',
@@ -65,7 +67,7 @@ class WindowTk(ttk.Frame):
         self.custom_idx = 0
         self.make_gradation_picker()
         self.make_button()
-        self.make_combo_area()
+        self.make_coloring_pic_controllers()
 
     def make_selected_color_display(self):
         frame = ttk.Frame(self)
@@ -115,20 +117,22 @@ class WindowTk(ttk.Frame):
             frame, text='Add Custom Colors', width=20, command=self.add_custom_color)
         btn.pack(side=tk.LEFT, padx=(10, 1))
 
-    def make_combo_area(self):
+    def make_coloring_pic_controllers(self):
         frame = ttk.Frame(self)
-        frame.pack(side=tk.TOP, padx=10, pady=15)
+        frame.pack(side=tk.TOP, padx=10, pady=10)
 
-        label = ttk.Label(frame, text='Coloring Picture')
-        label.pack(side=tk.TOP, pady=5)
+        self.var_radio = tk.IntVar(value=0)
+        label_lines = ttk.Label(frame, text='Outline : ')
+        label_lines.grid(column=0, row=0, pady=5)
 
-        item_list = [
-            'ElongatedPentagonalRotunda',
-            'PentagonalGyrocupolarotunda',
-            'PentagonalGyrobicupola',
-            'Triangle',
-            'Square'
-        ]
+        for i, (text, val) in enumerate(zip(['Show', 'Not Show'], [0, 1]), start=1):
+            radio_btn = ttk.Radiobutton(
+                frame, text=text, value=val, variable=self.var_radio, command=self.toggle_radio)
+            radio_btn.grid(column=i, row=0, pady=5)
+
+        df = create_df('SELECT name from polyhedrons;')
+        item_list = list(df.name)
+
         self.combobox = ttk.Combobox(
             master=frame,
             values=item_list,
@@ -137,15 +141,11 @@ class WindowTk(ttk.Frame):
             height=10,
             width=35
         )
-        self.combobox.pack(side=tk.TOP)
+        self.combobox.grid(column=0, row=1, columnspan=3, pady=5)
         self.combobox.set(item_list[0])
-        self.combobox.bind(
-            '<<ComboboxSelected>>',
-            self.show_coloring_picture
-        )
-        btn = tk.Button(
-            frame, text='Save', width=32, command=self.save_file)
-        btn.pack(side=tk.TOP, pady=10)
+        self.combobox.bind('<<ComboboxSelected>>', self.show_coloring_picture)
+        btn = tk.Button(frame, text='Save', width=32, command=self.save_file)
+        btn.grid(column=0, row=2, columnspan=3, pady=5)
 
     def show_selected_color(self, event):
         if color := event.widget.cget('background'):
@@ -187,6 +187,9 @@ class WindowTk(ttk.Frame):
 
     def show_coloring_picture(self, event=None):
         print(self.combobox.get())
+
+    def toggle_radio(self, event=None):
+        print(self.var_radio.get())
 
     def close(self, event=None):
         self.quit()
