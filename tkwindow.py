@@ -5,7 +5,7 @@ import tkinter.ttk as ttk
 from pathlib import Path
 from tkinter import filedialog
 
-from db_manage import create_df
+from db_manage import get_names
 
 
 COLORS = [
@@ -38,10 +38,11 @@ def change_dir(path):
 
 class WindowTk(ttk.Frame):
 
-    def __init__(self, master, func_save_file):
+    def __init__(self, master, panda_app):
         super().__init__(master)
         self.pack(fill=tk.Y, side=tk.LEFT, pady=10)
-        self.make_file = func_save_file
+        self.panda_app = panda_app
+
         self.make_gui()
         self.make_menubar()
 
@@ -121,17 +122,16 @@ class WindowTk(ttk.Frame):
         frame = ttk.Frame(self)
         frame.pack(side=tk.TOP, padx=10, pady=10)
 
-        self.var_radio = tk.IntVar(value=0)
+        self.var_radio = tk.IntVar(value=1)
         label_lines = ttk.Label(frame, text='Outline : ')
         label_lines.grid(column=0, row=0, pady=5)
 
-        for i, (text, val) in enumerate(zip(['Show', 'Not Show'], [0, 1]), start=1):
+        for i, (text, val) in enumerate(zip(['Show', 'Not Show'], [1, 0]), start=1):
             radio_btn = ttk.Radiobutton(
                 frame, text=text, value=val, variable=self.var_radio, command=self.toggle_radio)
             radio_btn.grid(column=i, row=0, pady=5)
 
-        df = create_df('SELECT name from polyhedrons;')
-        item_list = list(df.name)
+        item_list = get_names()
 
         self.combobox = ttk.Combobox(
             master=frame,
@@ -142,8 +142,8 @@ class WindowTk(ttk.Frame):
             width=35
         )
         self.combobox.grid(column=0, row=1, columnspan=3, pady=5)
+        self.combobox.bind('<<ComboboxSelected>>', self.show_coloring_pic)
         self.combobox.set(item_list[0])
-        self.combobox.bind('<<ComboboxSelected>>', self.show_coloring_picture)
         btn = tk.Button(frame, text='Save', width=32, command=self.save_file)
         btn.grid(column=0, row=2, columnspan=3, pady=5)
 
@@ -173,23 +173,26 @@ class WindowTk(ttk.Frame):
         self.created_color_label.configure(background=new_color)
 
     def save_file(self):
+        initialfile = self.combobox.get().replace(' ', '')
         if filepath := filedialog.asksaveasfilename(
                 title='Save as',
                 filetypes=[('bam', '.bam')],
                 initialdir='./',
                 defaultextension='bam',
-                initialfile='elongatedPentagonalRotunda'):
+                initialfile=initialfile):
             filepath = Path(filepath)
 
             # Using WindowsPath causes an error.
             with change_dir(filepath.parent):
-                self.make_file(filepath.name)
+                self.panda_app.make_file(filepath)
 
-    def show_coloring_picture(self, event=None):
-        print(self.combobox.get())
+    def show_coloring_pic(self, event=None):
+        name = self.combobox.get()
+        self.panda_app.show_coloring_pic(name)
 
     def toggle_radio(self, event=None):
-        print(self.var_radio.get())
+        outline = self.var_radio.get()
+        self.panda_app.toggle_debug(outline)
 
     def close(self, event=None):
         self.quit()

@@ -7,16 +7,15 @@ from direct.showbase.ShowBaseGlobal import globalClock
 from panda3d.core import WindowProperties, PandaNode, NodePath
 from panda3d.core import Vec3, LColor, Point3, Vec2
 from panda3d.core import GeomVertexFormat, GeomVertexData
-from panda3d.core import Geom, GeomTriangles, GeomVertexReader, GeomVertexWriter, GeomVertexRewriter
+from panda3d.core import Geom, GeomTriangles, GeomVertexReader, GeomVertexWriter
 from panda3d.core import GeomNode
 from panda3d.core import BitMask32
 from panda3d.bullet import BulletWorld, BulletDebugNode
 from panda3d.bullet import BulletRigidBodyNode
 from panda3d.bullet import BulletConvexHullShape
 
-
+from db_manage import get_vertices, get_faces
 from tkwindow import WindowTk
-from polyhedrons_data import POLYHEDRONS
 
 
 class Colors(Enum):
@@ -52,7 +51,8 @@ class ColoringBoard(ShowBase):
         root = self.tkRoot
         root.geometry('1080x640')
         root.resizable(False, False)
-        self.app = WindowTk(root, self.save_file)
+
+        self.app = WindowTk(root, self)
         root.bind('<Escape>', self.app.close)
 
         props = WindowProperties()
@@ -64,24 +64,20 @@ class ColoringBoard(ShowBase):
         self.openMainWindow(type='onscreen', props=props, size=(800, 600))
 
         self.disableMouse()
-
         self.camera_np = NodePath(PandaNode('cameraNode'))
         self.camera_np.reparentTo(self.render)
         self.camera.reparentTo(self.camera_np)
-
         self.camera.setPos(15, 0, 0)
-        # self.camera.setPos(10, 10, 10)
         self.camera.lookAt(0, 0, 0)
 
         self.world = BulletWorld()
 
-        # **********************************************************
-        debug = self.render.attachNewNode(BulletDebugNode('debug'))
-        self.world.setDebugNode(debug.node())
-        debug.show()
-        # **********************************************************
+        self.debug = self.render.attachNewNode(BulletDebugNode('debug'))
+        self.world.setDebugNode(self.debug.node())
+
         self.polh = Polyhedron(self.world)
-        self.show_polh()
+        self.show_coloring_pic(self.app.combobox.get())
+        self.toggle_debug()
 
         self.dragging = 0
         self.clicked_pos = None
@@ -97,12 +93,12 @@ class ColoringBoard(ShowBase):
     def release(self):
         self.state = Mouse.RELEASE
 
-    def save_file(self, filename):
+    def make_file(self, filepath):
         geom_node = self.polh.connect_geoms()
-        np = NodePath(PandaNode('elongatedPentagonalRotunda'))
+        np = NodePath(PandaNode(filepath.stem))
         obj = np.attachNewNode(geom_node)
         obj.setTwoSided(True)
-        np.writeBamFile(filename)
+        np.writeBamFile(filepath.name)
 
     def change_color(self, m_pos):
         near_pos = Point3()
@@ -119,12 +115,21 @@ class ColoringBoard(ShowBase):
                 color = LColor(*rgb, 1)
                 self.polh.change_face_color(node.getName(), color)
 
-    def show_polh(self):
-        self.data = POLYHEDRONS['elongated_pentagonal_rotunda']
-        vertices = self.data['vertices']
-        faces = self.data['faces']
-        color_pattern = self.data['color_pattern']
+    def show_coloring_pic(self, name):
+        self.polh.clear()
+        vertices = get_vertices(name)
+        faces = get_faces(name)
+
+        li = [len(item) for item in faces]
+        dic = {item: i for i, item in enumerate(set(li))}
+        color_pattern = [dic[item] for item in li]
         self.polh.make_faces(vertices, faces, color_pattern)
+
+    def toggle_debug(self, outline=1):
+        if outline:
+            self.debug.show()
+        else:
+            self.debug.hide()
 
     def rotate(self, dt, m_pos):
         vec = Vec3()
@@ -173,7 +178,6 @@ class Face(NodePath):
 
     def __init__(self, name, geom_node):
         super().__init__(BulletRigidBodyNode(name))
-        # self.reparentTo(base.render)
         obj = self.attachNewNode(geom_node)  # obj.reparentTo(self)はいらない
         obj.setTwoSided(True)
         shape = BulletConvexHullShape()
@@ -192,20 +196,6 @@ class Polyhedron(NodePath):
         self.world = world
 
     def make_faces(self, vertices, faces, color_pattern):
-        # >>> li = [len(item) for item in faces]
-        # >>> li
-        # [5, 3, 4, 4, 3, 4, 5, 4]
-        # >>> set(li)
-        # {3, 4, 5}
-        # >>> d = {item: i for item, i in enumerate(set(li))}
-        # >>> d
-        # {0: 3, 1: 4, 2: 5}
-        # >>> d = {item: i for i, item in enumerate(set(li))}
-        # >>> d
-        # {3: 0, 4: 1, 5: 2}
-        # >>> [d[item] for item in li]
-        # [2, 0, 1, 1, 0, 1, 2, 1]
-        
         n = max(color_pattern)
         colors = Colors.select(n + 1)
 
@@ -271,6 +261,11 @@ class Polyhedron(NodePath):
         face = self.getChild(i)
         face.setColor(color)
 
+    def clear(self):
+        for face in self.getChildren():
+            self.world.remove(face.node())
+            face.removeNode()
+
     def connect_geoms(self):
         format_ = GeomVertexFormat.getV3n3cpt2()  # getV3n3c4
         vdata = GeomVertexData('triangle', format_, Geom.UHStatic)
@@ -285,8 +280,8 @@ class Polyhedron(NodePath):
             rgba = face.getColor() if face.hasColor() else None
             np = face.findAllMatches('**/+GeomNode').getPath(0)
             geom_node = np.node()
-            geom = geom_node.getGeom(0)
-            face_vdata = geom.getVertexData()
+            face_geom = geom_node.getGeom(0)
+            face_vdata = face_geom.getVertexData()
             vertex_reader = GeomVertexReader(face_vdata, 'vertex')
             normal_reader = GeomVertexReader(face_vdata, 'normal')
             color_reader = GeomVertexReader(face_vdata, 'color')
