@@ -33,17 +33,10 @@ def get_names():
     return names
 
 
-def insert_data(data_p, data_v, data_f):
+def insert_data(sql, data):
     with closing(sqlite3.connect(DB_NAME)) as conn:
         conn.execute(PRAGMA_FOREIGN_KEY)
-
-        insert_polyhedrons = 'INSERT INTO polyhedrons (id, name) VALUES (?, ?)'
-        conn.executemany(insert_polyhedrons, data_p)
-        insert_vertices = 'INSERT INTO vertices (id, row_num, vertex) VALUES (?, ?, ?)'
-        conn.executemany(insert_vertices, data_v)
-        insert_faces = 'INSERT INTO faces (id, row_num, face) VALUES (?, ?, ?)'
-        conn.executemany(insert_faces, data_f)
-
+        conn.executemany(sql, data)
         conn.commit()
 
 
@@ -106,6 +99,10 @@ CREATE_FACES_TABLE = '''
         FOREIGN KEY(id) REFERENCES polyhedrons(id)
     );
 '''
+
+INSERT_POLYHEDRONS = 'INSERT INTO polyhedrons (id, name) VALUES (?, ?)'
+INSERT_VERTICES = 'INSERT INTO vertices (id, row_num, vertex) VALUES (?, ?, ?)'
+INSERT_FACES = 'INSERT INTO faces (id, row_num, face) VALUES (?, ?, ?)'
 
 
 if __name__ == '__main__':

@@ -1,4 +1,3 @@
-import random
 from enum import Enum, auto
 from textwrap import wrap
 
@@ -19,21 +18,16 @@ from tkwindow import WindowTk
 
 
 class Colors(Enum):
-
-    RED = LColor(1, 0, 0, 1)
-    BLUE = LColor(0, 0, 1, 1)
-    YELLOW = LColor(1, 1, 0, 1)
-    GREEN = LColor(0, 0.5, 0, 1)
-    ORANGE = LColor(1, 0.549, 0, 1)
-    MAGENTA = LColor(1, 0, 1, 1)
-    PURPLE = LColor(0.501, 0, 0.501, 1)
-    LIME = LColor(0, 1, 0, 1)
-    VIOLET = LColor(0.54, 0.16, 0.88, 1)
-    SKY = LColor(0, 0.74, 1, 1)
-
-    @classmethod
-    def select(cls, n):
-        return random.sample([m.value for m in cls], n)
+    FLORALWHITE = LColor(1.0, 0.98, 0.94, 1.0)
+    SEASHELL = LColor(1.0, 0.96, 0.93, 1.0)
+    OLDLACE = LColor(0.99, 0.96, 0.9, 1.0)
+    IVORY = LColor(1.0, 1.0, 0.94, 1.0)
+    BEIGE = LColor(0.96, 0.96, 0.86, 1.0)
+    LINEN = LColor(0.98, 0.94, 0.90, 1.0)
+    ANTIQUEWHITE = LColor(0.98, 0.92, 0.84, 1.0)
+    WHITESMOKE = LColor(0.96, 0.96, 0.96, 1.0)
+    GHOSTWHITE = LColor(0.97, 0.97, 1.0, 1.0)
+    SNOW = LColor(1.0, 0.98, 0.98, 1.0)
 
 
 class Mouse(Enum):
@@ -137,14 +131,14 @@ class ColoringBoard(ShowBase):
         delta_y = m_pos.y - self.clicked_pos.y
 
         if delta_x < 0:
-            vec.x -= 90
+            vec.x -= 180
         elif delta_x > 0:
-            vec.x += 90
+            vec.x += 180
 
         if delta_y < 0:
-            vec.z -= 90
+            vec.z -= 180
         elif delta_y > 0:
-            vec.z += 90
+            vec.z += 180
 
         self.camera_np.setHpr(self.camera_np.getHpr() + vec * dt)
         self.clicked_pos.x = m_pos.x
@@ -194,14 +188,12 @@ class Polyhedron(NodePath):
         super().__init__(PandaNode('polyhedronRoot'))
         self.reparentTo(base.render)
         self.world = world
+        self.colors = [m.value for m in Colors]
 
     def make_faces(self, vertices, faces, color_pattern):
-        n = max(color_pattern)
-        colors = Colors.select(n + 1)
-
         for idx, (f, p) in enumerate(zip(faces, color_pattern)):
             face = (Vec3(vertices[i]) for i in f)
-            geom_node = self.make_face_geomnode(face, len(f), colors[p])
+            geom_node = self.make_face_geomnode(face, len(f), self.colors[p])
             face = Face(f'face_{idx}', geom_node)
             face.reparentTo(self)
             self.world.attachRigidBody(face.node())
