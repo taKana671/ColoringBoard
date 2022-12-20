@@ -41,6 +41,10 @@ class ColoringBoard(ShowBase):
 
     def __init__(self):
         super().__init__(windowType='none')
+
+        self.world = BulletWorld()
+        self.polh = Polyhedron(self.world)
+        
         self.startTk()
         root = self.tkRoot
         root.geometry('1080x640')
@@ -64,13 +68,13 @@ class ColoringBoard(ShowBase):
         self.camera.setPos(15, 0, 0)
         self.camera.lookAt(0, 0, 0)
 
-        self.world = BulletWorld()
+        # self.world = BulletWorld()
 
         self.debug = self.render.attachNewNode(BulletDebugNode('debug'))
         self.world.setDebugNode(self.debug.node())
 
-        self.polh = Polyhedron(self.world)
-        self.show_coloring_pic(self.app.combobox.get())
+        # self.polh = Polyhedron(self.world)
+        # self.show_coloring_pic(self.app.subitem_combobox.get())
         self.toggle_debug()
 
         self.dragging = 0

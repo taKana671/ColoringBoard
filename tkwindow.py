@@ -5,7 +5,7 @@ import tkinter.ttk as ttk
 from pathlib import Path
 from tkinter import filedialog
 
-from db_manage import get_names
+from db_manage import get_items, get_sub_items
 
 
 COLORS = [
@@ -131,9 +131,9 @@ class WindowTk(ttk.Frame):
                 frame, text=text, value=val, variable=self.var_radio, command=self.toggle_radio)
             radio_btn.grid(column=i, row=0, pady=5)
 
-        item_list = get_names()
-
-        self.combobox = ttk.Combobox(
+        self.items = get_items()
+        item_list = list(self.items.keys())
+        self.item_combobox = ttk.Combobox(
             master=frame,
             values=item_list,
             justify='left',
@@ -141,11 +141,24 @@ class WindowTk(ttk.Frame):
             height=10,
             width=35
         )
-        self.combobox.grid(column=0, row=1, columnspan=3, pady=5)
-        self.combobox.bind('<<ComboboxSelected>>', self.show_coloring_pic)
-        self.combobox.set(item_list[0])
+        self.item_combobox.grid(column=0, row=1, columnspan=3, pady=5)
+        self.item_combobox.bind('<<ComboboxSelected>>', self.change_items)
+        self.item_combobox.set(item_list[0])
+
+        self.subitem_combobox = ttk.Combobox(
+            master=frame,
+            # values=item_list,
+            justify='left',
+            state='readonly',
+            height=10,
+            width=35
+        )
+        self.subitem_combobox.grid(column=0, row=2, columnspan=3, pady=5)
+        self.subitem_combobox.bind('<<ComboboxSelected>>', self.show_coloring_pic)
+        self.change_items()
+
         btn = tk.Button(frame, text='Save', width=32, command=self.save_file)
-        btn.grid(column=0, row=2, columnspan=3, pady=5)
+        btn.grid(column=0, row=3, columnspan=3, pady=5)
 
     def show_selected_color(self, event):
         if color := event.widget.cget('background'):
@@ -187,8 +200,15 @@ class WindowTk(ttk.Frame):
                 self.panda_app.make_file(filepath)
 
     def show_coloring_pic(self, event=None):
-        name = self.combobox.get()
+        name = self.subitem_combobox.get()
         self.panda_app.show_coloring_pic(name)
+
+    def change_items(self, event=None):
+        key = self.items[self.item_combobox.get()]
+        item_list = get_sub_items(key)
+        self.subitem_combobox.configure(values=item_list)
+        self.subitem_combobox.set(item_list[0])
+        self.panda_app.show_coloring_pic(item_list[0])
 
     def toggle_radio(self, event=None):
         outline = self.var_radio.get()
