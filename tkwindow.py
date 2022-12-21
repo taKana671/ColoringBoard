@@ -42,7 +42,6 @@ class WindowTk(ttk.Frame):
         super().__init__(master)
         self.pack(fill=tk.Y, side=tk.LEFT, pady=10)
         self.panda_app = panda_app
-
         self.make_gui()
         self.make_menubar()
 
@@ -56,7 +55,6 @@ class WindowTk(ttk.Frame):
         menu_file.add_command(label='Save As', command=self.save_file, accelerator='Ctrl+S')
         menu_file.add_separator()
         menu_file.add_command(label='close', command=self.close)
-        menu_file.bind_all('<Control-s>', self.save_file)
 
         menubar.add_cascade(label="File", menu=menu_file)
         self.master.config(menu=menubar)
@@ -134,25 +132,13 @@ class WindowTk(ttk.Frame):
         self.items = get_items()
         item_list = list(self.items.keys())
         self.item_combobox = ttk.Combobox(
-            master=frame,
-            values=item_list,
-            justify='left',
-            state='readonly',
-            height=10,
-            width=35
-        )
+            frame, values=item_list, justify='left', state='readonly', height=10, width=35)
         self.item_combobox.grid(column=0, row=1, columnspan=3, pady=5)
         self.item_combobox.bind('<<ComboboxSelected>>', self.change_items)
         self.item_combobox.set(item_list[0])
 
         self.subitem_combobox = ttk.Combobox(
-            master=frame,
-            # values=item_list,
-            justify='left',
-            state='readonly',
-            height=10,
-            width=35
-        )
+            frame, justify='left', state='readonly', height=10, width=35)
         self.subitem_combobox.grid(column=0, row=2, columnspan=3, pady=5)
         self.subitem_combobox.bind('<<ComboboxSelected>>', self.show_coloring_pic)
         self.change_items()
@@ -186,7 +172,7 @@ class WindowTk(ttk.Frame):
         self.created_color_label.configure(background=new_color)
 
     def save_file(self):
-        initialfile = self.combobox.get().replace(' ', '')
+        initialfile = self.subitem_combobox.get().replace(' ', '')
         if filepath := filedialog.asksaveasfilename(
                 title='Save as',
                 filetypes=[('bam', '.bam')],

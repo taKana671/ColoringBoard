@@ -41,15 +41,13 @@ class ColoringBoard(ShowBase):
 
     def __init__(self):
         super().__init__(windowType='none')
-
         self.world = BulletWorld()
         self.polh = Polyhedron(self.world)
-        
+
         self.startTk()
         root = self.tkRoot
         root.geometry('1080x640')
         root.resizable(False, False)
-
         self.app = WindowTk(root, self)
         root.bind('<Escape>', self.app.close)
 
@@ -57,7 +55,6 @@ class ColoringBoard(ShowBase):
         props.setParentWindow(root.winfo_id())
         props.setOrigin(260, 20)
         props.setSize(800, 600)
-        # props.setSize(self.frame.winfo_width(), self.frame.winfo_height())
         self.makeDefaultPipe()
         self.openMainWindow(type='onscreen', props=props, size=(800, 600))
 
@@ -68,14 +65,9 @@ class ColoringBoard(ShowBase):
         self.camera.setPos(15, 0, 0)
         self.camera.lookAt(0, 0, 0)
 
-        # self.world = BulletWorld()
-
         self.debug = self.render.attachNewNode(BulletDebugNode('debug'))
         self.world.setDebugNode(self.debug.node())
-
-        # self.polh = Polyhedron(self.world)
-        # self.show_coloring_pic(self.app.subitem_combobox.get())
-        self.toggle_debug()
+        self.debug.show()
 
         self.dragging = 0
         self.clicked_pos = None
@@ -107,8 +99,8 @@ class ColoringBoard(ShowBase):
         result = self.world.rayTestClosest(from_pos, to_pos)
 
         if result.hasHit():
-            node = result.getNode()
             if hexa_color := self.app.selected_color():
+                node = result.getNode()
                 rgb = [int(n, 16) / 255 for n in wrap(hexa_color[1:], 2)]
                 color = LColor(*rgb, 1)
                 self.polh.change_face_color(node.getName(), color)
@@ -176,7 +168,7 @@ class Face(NodePath):
 
     def __init__(self, name, geom_node):
         super().__init__(BulletRigidBodyNode(name))
-        obj = self.attachNewNode(geom_node)  # obj.reparentTo(self)はいらない
+        obj = self.attachNewNode(geom_node)
         obj.setTwoSided(True)
         shape = BulletConvexHullShape()
         shape.addGeom(geom_node.getGeom(0))
@@ -238,7 +230,6 @@ class Polyhedron(NodePath):
             vertex.addData3(pt)
             normal.addData3(pt.normalized())
             color.addData4f(rgba)
-            # texcoord.addData2f(tex)
 
         node = GeomNode('geomnode')
         prim = GeomTriangles(Geom.UHStatic)
@@ -263,6 +254,8 @@ class Polyhedron(NodePath):
             face.removeNode()
 
     def connect_geoms(self):
+        """Connect faces into one polyhedron.
+        """
         format_ = GeomVertexFormat.getV3n3cpt2()  # getV3n3c4
         vdata = GeomVertexData('triangle', format_, Geom.UHStatic)
         vertex_writer = GeomVertexWriter(vdata, 'vertex')

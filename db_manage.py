@@ -1,6 +1,7 @@
 import sqlite3
 from contextlib import closing
 
+
 DB_NAME = 'polyhedrons.db'
 
 
@@ -126,5 +127,3 @@ INSERT_FACES = 'INSERT INTO faces (id, row_num, face) VALUES (?, ?, ?)'
 
 if __name__ == '__main__':
     create_tables()
-
-    
