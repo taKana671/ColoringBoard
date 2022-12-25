@@ -3,7 +3,7 @@ import contextlib
 import tkinter as tk
 import tkinter.ttk as ttk
 from pathlib import Path
-from tkinter import filedialog
+from tkinter import filedialog, messagebox
 
 from db_manage import get_items, get_sub_items
 
@@ -52,6 +52,9 @@ class WindowTk(ttk.Frame):
     def make_menubar(self):
         menubar = tk.Menu(self)
         menu_file = tk.Menu(menubar, tearoff=False)
+
+        menu_file.add_command(label='Open File', command=self.open_file, accelerator='Ctrl+O')
+
         menu_file.add_command(label='Save As', command=self.save_file, accelerator='Ctrl+S')
         menu_file.add_separator()
         menu_file.add_command(label='close', command=self.close)
@@ -183,7 +186,19 @@ class WindowTk(ttk.Frame):
 
             # Using WindowsPath causes an error.
             with change_dir(filepath.parent):
-                self.panda_app.make_file(filepath)
+                self.panda_app.save_file(filepath)
+                messagebox.showinfo('info', 'Saved the file.')
+
+    def open_file(self):
+        if filepath := filedialog.askopenfilename(
+                title='Open file',
+                filetypes=[('bam', '.bam')],
+                initialdir='./'):
+            filepath = Path(filepath)
+
+            # Using WindowsPath causes an error.
+            with change_dir(filepath.parent):
+                self.panda_app.open_file(filepath)
 
     def show_coloring_pic(self, event=None):
         name = self.subitem_combobox.get()

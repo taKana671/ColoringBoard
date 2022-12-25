@@ -1,3 +1,4 @@
+from collections import defaultdict
 from enum import Enum, auto
 from textwrap import wrap
 
@@ -5,7 +6,7 @@ from direct.showbase.ShowBase import ShowBase
 from direct.showbase.ShowBaseGlobal import globalClock
 from panda3d.core import WindowProperties, PandaNode, NodePath
 from panda3d.core import Vec3, LColor, Point3, Vec2
-from panda3d.core import GeomVertexFormat, GeomVertexData
+from panda3d.core import GeomVertexFormat, GeomVertexData, GeomVertexArrayFormat
 from panda3d.core import Geom, GeomTriangles, GeomVertexReader, GeomVertexWriter
 from panda3d.core import GeomNode
 from panda3d.core import BitMask32
@@ -83,12 +84,17 @@ class ColoringBoard(ShowBase):
     def release(self):
         self.state = Mouse.RELEASE
 
-    def make_file(self, filepath):
-        geom_node = self.polh.connect_geoms()
+    def save_file(self, filepath):
+        geom_node = self.polh.assemble()
         np = NodePath(PandaNode(filepath.stem))
         obj = np.attachNewNode(geom_node)
         obj.setTwoSided(True)
         np.writeBamFile(filepath.name)
+
+    def open_file(self, filepath):
+        self.polh.clear()
+        model = self.loader.loadModel(filepath.name)
+        self.polh.disassemble(model)
 
     def change_color(self, m_pos):
         near_pos = Point3()
@@ -113,7 +119,10 @@ class ColoringBoard(ShowBase):
         li = [len(item) for item in faces]
         dic = {item: i for i, item in enumerate(set(li))}
         color_pattern = [dic[item] for item in li]
-        self.polh.make_faces(vertices, faces, color_pattern)
+
+        for i, (f, p) in enumerate(zip(faces, color_pattern)):
+            face_vertices = (Vec3(vertices[i]) for i in f)
+            self.polh.make_face(face_vertices, len(f), i, self.polh.colors[p])
 
     def toggle_debug(self, outline=1):
         if outline:
@@ -185,14 +194,49 @@ class Polyhedron(NodePath):
         self.reparentTo(base.render)
         self.world = world
         self.colors = [m.value for m in Colors]
+        self.polh_format = self.make_custom_format()
 
-    def make_faces(self, vertices, faces, color_pattern):
-        for idx, (f, p) in enumerate(zip(faces, color_pattern)):
-            face = (Vec3(vertices[i]) for i in f)
-            geom_node = self.make_face_geomnode(face, len(f), self.colors[p])
-            face = Face(f'face_{idx}', geom_node)
-            face.reparentTo(self)
-            self.world.attachRigidBody(face.node())
+    def make_custom_format(self):
+        array = GeomVertexArrayFormat()
+        array.addColumn('vertex', 3, Geom.NTFloat32, Geom.CPoint)
+        array.addColumn('color', 4, Geom.NTFloat32, Geom.CColor)
+        array.addColumn('normal', 3, Geom.NTFloat32, Geom.CNormal)
+        array.addColumn('face', 1, Geom.NTUint8, Geom.COther)
+        format_ = GeomVertexFormat()
+        format_.addArray(array)
+        format_ = GeomVertexFormat.registerFormat(format_)
+        return format_
+
+    def disassemble(self, model):
+        np = model.findAllMatches('**/+GeomNode').getPath(0)
+        geom_node = np.node()
+        geom = geom_node.getGeom(0)
+        vdata = geom.getVertexData()
+
+        vertex_reader = GeomVertexReader(vdata, 'vertex')
+        face_reader = GeomVertexReader(vdata, 'face')
+        color_reader = GeomVertexReader(vdata, 'color')
+
+        face_dic = defaultdict(list)
+        color_dic = dict()
+
+        while not vertex_reader.isAtEnd():
+            vertex = vertex_reader.getData3()
+            color = color_reader.getData4()
+            face_num = face_reader.getData1i()
+
+            face_dic[face_num].append(vertex)
+            if face_num not in color_dic:
+                color_dic[face_num] = LColor(color)
+
+        for key, face_vertices in face_dic.items():
+            self.make_face(face_vertices, len(face_vertices), key, color_dic[key])
+
+    def make_face(self, face_vertices, num_vertices, face_num, color):
+        geom_node = self.make_geomnode(face_vertices, num_vertices, face_num, color)
+        face = Face(f'face_{face_num}', geom_node)
+        face.reparentTo(self)
+        self.world.attachRigidBody(face.node())
 
     def triangle(self, start):
         return (start, start + 1, start + 2)
@@ -217,19 +261,19 @@ class Polyhedron(NodePath):
             case _:
                 yield from self.polygon(start, n)
 
-    def make_face_geomnode(self, face, num_vertices, rgba):
-        format_ = GeomVertexFormat.getV3n3cpt2()  # getV3n3c4
-        vdata = GeomVertexData('triangle', format_, Geom.UHStatic)
+    def make_geomnode(self, face_vertices, num_vertices, face_num, rgba):
+        vdata = GeomVertexData('polyhedron', self.polh_format, Geom.UHStatic)
         vdata.setNumRows(num_vertices)
-
         vertex = GeomVertexWriter(vdata, 'vertex')
         normal = GeomVertexWriter(vdata, 'normal')
         color = GeomVertexWriter(vdata, 'color')
+        face = GeomVertexWriter(vdata, 'face')
 
-        for pt in face:
+        for pt in face_vertices:
             vertex.addData3(pt)
             normal.addData3(pt.normalized())
             color.addData4f(rgba)
+            face.add_data1i(face_num)
 
         node = GeomNode('geomnode')
         prim = GeomTriangles(Geom.UHStatic)
@@ -253,37 +297,40 @@ class Polyhedron(NodePath):
             self.world.remove(face.node())
             face.removeNode()
 
-    def connect_geoms(self):
+    def assemble(self):
         """Connect faces into one polyhedron.
         """
-        format_ = GeomVertexFormat.getV3n3cpt2()  # getV3n3c4
-        vdata = GeomVertexData('triangle', format_, Geom.UHStatic)
+        vdata = GeomVertexData('polyhedron', self.polh_format, Geom.UHStatic)
         vertex_writer = GeomVertexWriter(vdata, 'vertex')
         normal_writer = GeomVertexWriter(vdata, 'normal')
         color_writer = GeomVertexWriter(vdata, 'color')
+        face_writer = GeomVertexWriter(vdata, 'face')
 
         prim = GeomTriangles(Geom.UHStatic)
         start = 0
 
-        for face in self.getChildren():
-            rgba = face.getColor() if face.hasColor() else None
-            np = face.findAllMatches('**/+GeomNode').getPath(0)
+        for child in self.getChildren():
+            rgba = child.getColor() if child.hasColor() else None
+            np = child.findAllMatches('**/+GeomNode').getPath(0)
             geom_node = np.node()
-            face_geom = geom_node.getGeom(0)
-            face_vdata = face_geom.getVertexData()
-            vertex_reader = GeomVertexReader(face_vdata, 'vertex')
-            normal_reader = GeomVertexReader(face_vdata, 'normal')
-            color_reader = GeomVertexReader(face_vdata, 'color')
+            geom = geom_node.getGeom(0)
+            child_vdata = geom.getVertexData()
+            vertex_reader = GeomVertexReader(child_vdata, 'vertex')
+            normal_reader = GeomVertexReader(child_vdata, 'normal')
+            color_reader = GeomVertexReader(child_vdata, 'color')
+            face_reader = GeomVertexReader(child_vdata, 'face')
 
             while not vertex_reader.isAtEnd():
                 vertex_writer.addData3(vertex_reader.getData3())
                 normal_writer.addData3(normal_reader.getData3())
+                face_writer.addData1i(face_reader.getData1i())
+
                 if rgba:
                     color_writer.addData4f(rgba)
                 else:
                     color_writer.addData4f(color_reader.getData4f())
 
-            n = face_vdata.getNumRows()
+            n = child_vdata.getNumRows()
             for vertices in self.prim_vertices(n, start):
                 prim.addVertices(*vertices)
             start += n
