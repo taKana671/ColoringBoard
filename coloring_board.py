@@ -207,12 +207,21 @@ class Polyhedron(NodePath):
         format_ = GeomVertexFormat.registerFormat(format_)
         return format_
 
-    def disassemble(self, model):
-        np = model.findAllMatches('**/+GeomNode').getPath(0)
-        geom_node = np.node()
-        geom = geom_node.getGeom(0)
-        vdata = geom.getVertexData()
+    def get_vdata(self, np, modify=False):
+        found = np.findAllMatches('**/+GeomNode').getPath(0)
+        geom_node = found.node()
 
+        if modify:
+            geom = geom_node.modifyGeom(0)
+            vdata = geom.modifyVertexData()
+        else:
+            geom = geom_node.getGeom(0)
+            vdata = geom.getVertexData()
+
+        return vdata
+
+    def disassemble(self, model):
+        vdata = self.get_vdata(model)
         vertex_reader = GeomVertexReader(vdata, 'vertex')
         face_reader = GeomVertexReader(vdata, 'face')
         color_reader = GeomVertexReader(vdata, 'color')
@@ -290,7 +299,11 @@ class Polyhedron(NodePath):
     def change_face_color(self, node_name, color):
         i = int(node_name.split('_')[1])
         face = self.getChild(i)
-        face.setColor(color)
+        vdata = self.get_vdata(face, modify=True)
+        color_writer = GeomVertexWriter(vdata, 'color')
+
+        while not color_writer.isAtEnd():
+            color_writer.setData4f(color)
 
     def clear(self):
         for face in self.getChildren():
@@ -310,11 +323,7 @@ class Polyhedron(NodePath):
         start = 0
 
         for child in self.getChildren():
-            rgba = child.getColor() if child.hasColor() else None
-            np = child.findAllMatches('**/+GeomNode').getPath(0)
-            geom_node = np.node()
-            geom = geom_node.getGeom(0)
-            child_vdata = geom.getVertexData()
+            child_vdata = self.get_vdata(child)
             vertex_reader = GeomVertexReader(child_vdata, 'vertex')
             normal_reader = GeomVertexReader(child_vdata, 'normal')
             color_reader = GeomVertexReader(child_vdata, 'color')
@@ -324,11 +333,7 @@ class Polyhedron(NodePath):
                 vertex_writer.addData3(vertex_reader.getData3())
                 normal_writer.addData3(normal_reader.getData3())
                 face_writer.addData1i(face_reader.getData1i())
-
-                if rgba:
-                    color_writer.addData4f(rgba)
-                else:
-                    color_writer.addData4f(color_reader.getData4f())
+                color_writer.addData4f(color_reader.getData4f())
 
             n = child_vdata.getNumRows()
             for vertices in self.prim_vertices(n, start):
