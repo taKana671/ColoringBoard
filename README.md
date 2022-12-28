@@ -3,7 +3,7 @@
 
 # Demo
 
-![coloringBoard_demo](https://user-images.githubusercontent.com/48859041/209813638-d31d7e1e-9c60-4ff8-b08a-b3cdbe192093.gif)
+![coloringBoard_demo](https://user-images.githubusercontent.com/48859041/209814452-e43a6726-5b54-46c3-b0ad-100f7eb87259.gif)
  
 # Requirements
 * Panda3D 1.10.12
