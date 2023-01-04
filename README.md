@@ -18,3 +18,9 @@
 ```
 >>>python coloring_board.py
 ```
+
+* Drag the three sliders to make a custom color.
+* Click [Add Custom Colors] button to add a label of the custom color. 
+* Select a category from the first combobox, and a name of polyhedron to display from the second one.
+* Click [Save] button to write colored 3D polyhedron model out to a bam file.
+* Click [File]>[Open File] to open the saved bam file. 
