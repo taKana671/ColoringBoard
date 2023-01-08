@@ -13,6 +13,7 @@ from panda3d.core import BitMask32
 from panda3d.bullet import BulletWorld, BulletDebugNode
 from panda3d.bullet import BulletRigidBodyNode
 from panda3d.bullet import BulletConvexHullShape
+import numpy as np
 
 from db_manage import get_vertices, get_faces
 from tkwindow import WindowTk
@@ -117,9 +118,7 @@ class ColoringBoard(ShowBase):
         vertices = get_vertices(name)
         vertices = [Vec3(vertex) for vertex in vertices]
         faces = get_faces(name)
-
-        bounds = Bounds(vertices)
-        uv = [bounds.calc_uv(vertex) for vertex in vertices]
+        uv = [vertex for vertex in self.polh.calc_uv(vertices)]
 
         li = [len(item) for item in faces]
         dic = {item: i for i, item in enumerate(set(li))}
@@ -226,6 +225,20 @@ class Polyhedron(NodePath):
             vdata = geom.getVertexData()
 
         return vdata
+
+    def calc_uv(self, vertices):
+        """
+        vertices: list of Vec3
+        """
+        bounds = Bounds(vertices)
+
+        for vertex in vertices:
+            nm = (vertex - bounds.center) / bounds.radius
+            phi = np.arctan2(nm.z, nm.x)
+            theta = np.arcsin(nm.y)
+            u = (phi + np.pi) / (2 * np.pi)
+            v = (theta + np.pi / 2) / np.pi
+            yield Vec2(u, v)
 
     def disassemble(self, model):
         vdata = self.get_vdata(model)

@@ -1,6 +1,4 @@
-from panda3d.core import Vec3, Vec2
-
-import numpy as np
+from panda3d.core import Vec3
 
 
 class Bounds:
@@ -44,15 +42,3 @@ class Bounds:
             z = vertex.z - self.center.z
             radius = (x ** 2 + y ** 2 + z ** 2) ** 0.5
             yield radius
-
-    def calc_uv(self, vertex):
-        """
-        vertex: Vec3
-        """
-        nm = (vertex - self.center) / self.radius
-        phi = np.arctan2(nm.z, nm.x)
-        theta = np.arcsin(nm.y)
-        u = (phi + np.pi) / (2 * np.pi)
-        v = (theta + np.pi / 2) / np.pi
-
-        return Vec2(u, v)
