@@ -16,6 +16,7 @@ from panda3d.bullet import BulletConvexHullShape
 
 from db_manage import get_vertices, get_faces
 from tkwindow import WindowTk
+from bounds import Bounds
 
 
 class Colors(Enum):
@@ -114,15 +115,20 @@ class ColoringBoard(ShowBase):
     def show_coloring_pic(self, name):
         self.polh.clear()
         vertices = get_vertices(name)
+        vertices = [Vec3(vertex) for vertex in vertices]
         faces = get_faces(name)
+
+        bounds = Bounds(vertices)
+        uv = [bounds.calc_uv(vertex) for vertex in vertices]
 
         li = [len(item) for item in faces]
         dic = {item: i for i, item in enumerate(set(li))}
         color_pattern = [dic[item] for item in li]
 
         for i, (f, p) in enumerate(zip(faces, color_pattern)):
-            face_vertices = (Vec3(vertices[i]) for i in f)
-            self.polh.make_face(face_vertices, len(f), i, self.polh.colors[p])
+            face_vertices = [vertices[i] for i in f]
+            face_uv = [uv[i] for i in f]
+            self.polh.make_face(face_vertices, face_uv, i, self.polh.colors[p])
 
     def toggle_debug(self, outline=1):
         if outline:
@@ -201,6 +207,7 @@ class Polyhedron(NodePath):
         array.addColumn('vertex', 3, Geom.NTFloat32, Geom.CPoint)
         array.addColumn('color', 4, Geom.NTFloat32, Geom.CColor)
         array.addColumn('normal', 3, Geom.NTFloat32, Geom.CNormal)
+        array.addColumn('texcoord', 2, Geom.NTFloat32, Geom.CTexcoord)
         array.addColumn('face', 1, Geom.NTUint8, Geom.COther)
         format_ = GeomVertexFormat()
         format_.addArray(array)
@@ -225,24 +232,28 @@ class Polyhedron(NodePath):
         vertex_reader = GeomVertexReader(vdata, 'vertex')
         face_reader = GeomVertexReader(vdata, 'face')
         color_reader = GeomVertexReader(vdata, 'color')
+        texcoord_reader = GeomVertexReader(vdata, 'texcoord')
 
         face_dic = defaultdict(list)
+        texcoord_dic = defaultdict(list)
         color_dic = dict()
 
         while not vertex_reader.isAtEnd():
             vertex = vertex_reader.getData3()
             color = color_reader.getData4()
             face_num = face_reader.getData1i()
+            texcoord = texcoord_reader.getData2f()
 
             face_dic[face_num].append(vertex)
+            texcoord_dic[face_num].append(texcoord)
             if face_num not in color_dic:
                 color_dic[face_num] = LColor(color)
 
         for key, face_vertices in face_dic.items():
-            self.make_face(face_vertices, len(face_vertices), key, color_dic[key])
+            self.make_face(face_vertices, texcoord_dic[key], key, color_dic[key])
 
-    def make_face(self, face_vertices, num_vertices, face_num, color):
-        geom_node = self.make_geomnode(face_vertices, num_vertices, face_num, color)
+    def make_face(self, face_vertices, texcoords, face_num, color):
+        geom_node = self.make_geomnode(face_vertices, texcoords, face_num, color)
         face = Face(f'face_{face_num}', geom_node)
         face.reparentTo(self)
         self.world.attachRigidBody(face.node())
@@ -270,24 +281,27 @@ class Polyhedron(NodePath):
             case _:
                 yield from self.polygon(start, n)
 
-    def make_geomnode(self, face_vertices, num_vertices, face_num, rgba):
+    def make_geomnode(self, face_vertices, texcoords, face_num, rgba):
+        num_rows = len(face_vertices)
         vdata = GeomVertexData('polyhedron', self.polh_format, Geom.UHStatic)
-        vdata.setNumRows(num_vertices)
+        vdata.setNumRows(num_rows)
         vertex = GeomVertexWriter(vdata, 'vertex')
         normal = GeomVertexWriter(vdata, 'normal')
         color = GeomVertexWriter(vdata, 'color')
+        texcoord = GeomVertexWriter(vdata, 'texcoord')
         face = GeomVertexWriter(vdata, 'face')
 
-        for pt in face_vertices:
+        for pt, uv in zip(face_vertices, texcoords):
             vertex.addData3(pt)
             normal.addData3(pt.normalized())
             color.addData4f(rgba)
+            texcoord.addData2f(uv)
             face.add_data1i(face_num)
 
         node = GeomNode('geomnode')
         prim = GeomTriangles(Geom.UHStatic)
 
-        for vertices in self.prim_vertices(num_vertices, 0):
+        for vertices in self.prim_vertices(num_rows, 0):
             prim.addVertices(*vertices)
 
         geom = Geom(vdata)
@@ -317,6 +331,7 @@ class Polyhedron(NodePath):
         vertex_writer = GeomVertexWriter(vdata, 'vertex')
         normal_writer = GeomVertexWriter(vdata, 'normal')
         color_writer = GeomVertexWriter(vdata, 'color')
+        texcoord_writer = GeomVertexWriter(vdata, 'texcoord')
         face_writer = GeomVertexWriter(vdata, 'face')
 
         prim = GeomTriangles(Geom.UHStatic)
@@ -327,6 +342,7 @@ class Polyhedron(NodePath):
             vertex_reader = GeomVertexReader(child_vdata, 'vertex')
             normal_reader = GeomVertexReader(child_vdata, 'normal')
             color_reader = GeomVertexReader(child_vdata, 'color')
+            texcoord_reader = GeomVertexReader(child_vdata, 'texcoord')
             face_reader = GeomVertexReader(child_vdata, 'face')
 
             while not vertex_reader.isAtEnd():
@@ -334,6 +350,7 @@ class Polyhedron(NodePath):
                 normal_writer.addData3(normal_reader.getData3())
                 face_writer.addData1i(face_reader.getData1i())
                 color_writer.addData4f(color_reader.getData4f())
+                texcoord_writer.addData2f(texcoord_reader.getData2f())
 
             n = child_vdata.getNumRows()
             for vertices in self.prim_vertices(n, start):
