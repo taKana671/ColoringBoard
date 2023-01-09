@@ -1,5 +1,5 @@
 # ColoringBoard
-* A coloring tool of Panda3D integration into Tkinter
+* A coloring tool of Panda3D integration into Tkinter to make colorful 3D models.
 
 # Demo
 
