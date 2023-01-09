@@ -44,6 +44,7 @@ class WindowTk(ttk.Frame):
         self.panda_app = panda_app
         self.make_gui()
         self.make_menubar()
+        self.opend_file_name = None
 
     def selected_color(self):
         color = self.selected_color_label.cget('background')
@@ -52,13 +53,10 @@ class WindowTk(ttk.Frame):
     def make_menubar(self):
         menubar = tk.Menu(self)
         menu_file = tk.Menu(menubar, tearoff=False)
-
         menu_file.add_command(label='Open File', command=self.open_file, accelerator='Ctrl+O')
-
         menu_file.add_command(label='Save As', command=self.save_file, accelerator='Ctrl+S')
         menu_file.add_separator()
         menu_file.add_command(label='close', command=self.close)
-
         menubar.add_cascade(label="File", menu=menu_file)
         self.master.config(menu=menubar)
 
@@ -165,17 +163,22 @@ class WindowTk(ttk.Frame):
         color = str(self.created_color_label.cget('background'))
         value = hex(value).replace('0x', '').zfill(2)
 
-        if text == 'R':
-            new_color = f'#{value}{color[3:]}'
-        elif text == 'G':
-            new_color = f'{color[:3]}{value}{color[5:]}'
-        elif text == 'B':
-            new_color = f'{color[:5]}{value}'
+        match text:
+            case 'R':
+                new_color = f'#{value}{color[3:]}'
+            case 'G':
+                new_color = f'{color[:3]}{value}{color[5:]}'
+            case 'B':
+                new_color = f'{color[:5]}{value}'
 
         self.created_color_label.configure(background=new_color)
 
     def save_file(self):
-        initialfile = self.subitem_combobox.get().replace(' ', '')
+        if self.opend_file_name:
+            initialfile = self.opend_file_name
+        else:
+            initialfile = self.subitem_combobox.get().replace(' ', '')
+
         if filepath := filedialog.asksaveasfilename(
                 title='Save as',
                 filetypes=[('bam', '.bam')],
@@ -195,6 +198,7 @@ class WindowTk(ttk.Frame):
                 filetypes=[('bam', '.bam')],
                 initialdir='./'):
             filepath = Path(filepath)
+            self.opend_file_name = filepath.stem
 
             # Using WindowsPath causes an error.
             with change_dir(filepath.parent):
@@ -202,6 +206,7 @@ class WindowTk(ttk.Frame):
 
     def show_coloring_pic(self, event=None):
         name = self.subitem_combobox.get()
+        self.opend_file_name = None
         self.panda_app.show_coloring_pic(name)
 
     def change_items(self, event=None):
@@ -209,7 +214,7 @@ class WindowTk(ttk.Frame):
         item_list = get_sub_items(key)
         self.subitem_combobox.configure(values=item_list)
         self.subitem_combobox.set(item_list[0])
-        self.panda_app.show_coloring_pic(item_list[0])
+        self.show_coloring_pic()
 
     def toggle_radio(self, event=None):
         outline = self.var_radio.get()
