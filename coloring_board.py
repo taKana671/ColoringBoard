@@ -88,10 +88,10 @@ class ColoringBoard(ShowBase):
 
     def save_file(self, filepath):
         geom_node = self.polh.assemble()
-        np = NodePath(PandaNode(filepath.stem))
-        obj = np.attachNewNode(geom_node)
+        node_path = NodePath(PandaNode(filepath.stem))
+        obj = node_path.attachNewNode(geom_node)
         obj.setTwoSided(True)
-        np.writeBamFile(filepath.name)
+        node_path.writeBamFile(filepath.name)
 
     def open_file(self, filepath):
         self.polh.clear()
@@ -202,19 +202,17 @@ class Polyhedron(NodePath):
         self.polh_format = self.make_custom_format()
 
     def make_custom_format(self):
-        array = GeomVertexArrayFormat()
-        array.addColumn('vertex', 3, Geom.NTFloat32, Geom.CPoint)
-        array.addColumn('color', 4, Geom.NTFloat32, Geom.CColor)
-        array.addColumn('normal', 3, Geom.NTFloat32, Geom.CNormal)
-        array.addColumn('texcoord', 2, Geom.NTFloat32, Geom.CTexcoord)
-        array.addColumn('face', 1, Geom.NTUint8, Geom.COther)
-        format_ = GeomVertexFormat()
-        format_.addArray(array)
-        format_ = GeomVertexFormat.registerFormat(format_)
+        array_format = GeomVertexArrayFormat()
+        array_format.addColumn('vertex', 3, Geom.NTFloat32, Geom.CPoint)
+        array_format.addColumn('color', 4, Geom.NTFloat32, Geom.CColor)
+        array_format.addColumn('normal', 3, Geom.NTFloat32, Geom.CNormal)
+        array_format.addColumn('texcoord', 2, Geom.NTFloat32, Geom.CTexcoord)
+        array_format.addColumn('face', 1, Geom.NTUint8, Geom.COther)
+        format_ = GeomVertexFormat.registerFormat(array_format)
         return format_
 
-    def get_vdata(self, np, modify=False):
-        found = np.findAllMatches('**/+GeomNode').getPath(0)
+    def get_vdata(self, node_path, modify=False):
+        found = node_path.findAllMatches('**/+GeomNode').getPath(0)
         geom_node = found.node()
 
         if modify:
