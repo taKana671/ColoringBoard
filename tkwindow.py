@@ -187,10 +187,8 @@ class WindowTk(ttk.Frame):
                 initialfile=initialfile):
             filepath = Path(filepath)
 
-            # Using WindowsPath causes an error.
-            with change_dir(filepath.parent):
-                self.panda_app.save_file(filepath)
-                messagebox.showinfo('info', 'Saved the file.')
+            self.panda_app.save_file(filepath)
+            messagebox.showinfo('info', 'Saved the file.')
 
     def open_file(self):
         if filepath := filedialog.askopenfilename(
@@ -200,9 +198,7 @@ class WindowTk(ttk.Frame):
             filepath = Path(filepath)
             self.opend_file_name = filepath.stem
 
-            # Using WindowsPath causes an error.
-            with change_dir(filepath.parent):
-                self.panda_app.open_file(filepath)
+            self.panda_app.open_file(filepath)
 
     def show_coloring_pic(self, event=None):
         name = self.subitem_combobox.get()

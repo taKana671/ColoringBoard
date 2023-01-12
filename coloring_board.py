@@ -91,11 +91,11 @@ class ColoringBoard(ShowBase):
         node_path = NodePath(PandaNode(filepath.stem))
         obj = node_path.attachNewNode(geom_node)
         obj.setTwoSided(True)
-        node_path.writeBamFile(filepath.name)
+        node_path.writeBamFile(filepath)
 
     def open_file(self, filepath):
         self.polh.clear()
-        model = self.loader.loadModel(filepath.name)
+        model = self.loader.loadModel(filepath)
         self.polh.disassemble(model)
 
     def change_color(self, m_pos):
