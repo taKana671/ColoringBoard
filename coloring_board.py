@@ -273,7 +273,7 @@ class Polyhedron(NodePath):
         return (start, start + 1, start + 2)
 
     def square(self, start):
-        for x, y, z in [(0, 1, 3), (1, 2, 3)]:
+        for x, y, z in [(2, 1, 0), (0, 3, 2)]:
             yield (start + x, start + y, start + z)
 
     def polygon(self, start, vertices_num):
