@@ -29,16 +29,14 @@ class Bounds:
 
     def get_center(self, vertices):
         cnt = len(vertices)
-        x = sum(vertex.x for vertex in vertices) / cnt
-        y = sum(vertex.y for vertex in vertices) / cnt
-        z = sum(vertex.z for vertex in vertices) / cnt
+        total = Vec3()
 
-        return Vec3(x, y, z)
+        for vertex in vertices:
+            total += vertex
+        return total / cnt
 
     def get_radius(self, vertices):
         for vertex in vertices:
-            x = vertex.x - self.center.x
-            y = vertex.y - self.center.y
-            z = vertex.z - self.center.z
-            radius = (x ** 2 + y ** 2 + z ** 2) ** 0.5
+            vec = vertex - self.center
+            radius = sum(v ** 2 for v in vec) ** 0.5
             yield radius
